@@ -36,6 +36,8 @@ class Renderer: NSObject {
     private var vertices = [Vertex]()
 
     init(metalKitView: MTKView) throws {
+        metalKitView.colorPixelFormat = Renderer.shouldUseWideColor ? .bgra10_xr : .bgra8Unorm
+        
         guard let device = metalKitView.device else { throw Errors.deviceNotFound }
         guard let library = device.makeDefaultLibrary() else { throw Errors.cantCreateLibrary }
         guard let pipelineState = Renderer.makePipelineState(for: metalKitView, device: device, library: library) else { throw Errors.cantCreatePipeline }
@@ -44,8 +46,6 @@ class Renderer: NSObject {
         self.device = device
         self.pipelineState = pipelineState
         self.commandQueue = commandQueue
-
-        metalKitView.colorPixelFormat = Renderer.shouldUseWideColor ? .bgra10_xr : .bgra8Unorm
         
         super.init()
     }
