@@ -10,6 +10,7 @@ import MetalKit
 import UIKit
 
 class MetalViewController: UIViewController {
+    
     private var renderer: Renderer?
 
     @IBOutlet weak var metalView: MTKView!
@@ -22,23 +23,13 @@ class MetalViewController: UIViewController {
             renderer = try Renderer(metalKitView: metalView)
             metalView.delegate = renderer
         } catch {
-            showAlert(for: error)
+            print("Error creating renderer: \(error.localizedDescription)")
         }
     }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         renderer?.mtkView(metalView, drawableSizeWillChange: metalView.drawableSize)
-    }
-    
-    private func showAlert(for error: Error) {
-        let message = """
-                      Error creating renderer: \(error.localizedDescription). \
-                      Make sure you are running on a real device.
-                      """
-        let alertController = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
-        alertController.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alertController, animated: true)
     }
 }
 
