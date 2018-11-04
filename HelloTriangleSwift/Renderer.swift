@@ -21,12 +21,7 @@ class Renderer: NSObject {
     var commandQueue: MTLCommandQueue
     var viewportSize: simd_uint2 = vector2(0, 0)
 
-    private let vertices: [Vertex] = {
-        let vertex1 = Vertex(position: float2(-400,-400), color: float4([1, 0, 0, 1]))
-        let vertex2 = Vertex(position: float2(0, 400), color: float4([0, 1, 0, 1]))
-        let vertex3 = Vertex(position: float2(400, -400), color: float4([0, 0, 1, 1]))
-        return [vertex1, vertex2, vertex3]
-    }()
+    private var vertices = [Vertex]()
 
     init(metalKitView: MTKView) throws {
         guard let device = metalKitView.device else {
@@ -57,13 +52,26 @@ class Renderer: NSObject {
         descriptor.depthAttachmentPixelFormat = metalKitView.depthStencilPixelFormat
         return try? device.makeRenderPipelineState(descriptor: descriptor)
     }
+    
+    private func makeVerticesForViewSize(_ size: CGSize, padding: CGFloat) -> [Vertex] {
+        let maxX = Float(size.width / 2.0 - padding)
+        let minX = Float(-maxX)
+        let maxY = Float(size.height / 2.0 - padding)
+        let minY = Float(-maxY)
+        
+        let vertex1 = Vertex(position: float2(minX ,minY), color: float4([1, 0, 0, 1]))
+        let vertex2 = Vertex(position: float2(0, maxY), color: float4([0, 1, 0, 1]))
+        let vertex3 = Vertex(position: float2(maxX, minY), color: float4([0, 0, 1, 1]))
+        
+        return [vertex1, vertex2, vertex3]
+    }
 }
 
 extension Renderer: MTKViewDelegate {
-
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         viewportSize.x = UInt32(size.width)
         viewportSize.y = UInt32(size.height)
+        vertices = makeVerticesForViewSize(size, padding: 48.0)
     }
     
     func draw(in view: MTKView) {
@@ -78,13 +86,19 @@ extension Renderer: MTKViewDelegate {
     }
 
     private func prepareToDraw(using encoder: MTLRenderCommandEncoder) {
-        let viewPort = MTLViewport(originX: 0, originY: 0,
-                                   width: Double(viewportSize.x), height: Double(viewportSize.y),
+        let viewPort = MTLViewport(originX: 0,
+                                   originY: 0,
+                                   width: Double(viewportSize.x),
+                                   height: Double(viewportSize.y),
                                    znear: -1.0, zfar: 1.0)
         encoder.setViewport(viewPort)
         encoder.setRenderPipelineState(pipelineState)
-        encoder.setVertexBytes(vertices, length: MemoryLayout<Vertex>.stride * 3, index: Int(VertexInputIndexVertices.rawValue))
-        encoder.setVertexBytes(&viewportSize, length: MemoryLayout<simd_uint2>.stride, index: Int(VertexInputIndexViewportSize.rawValue))
+        encoder.setVertexBytes(vertices,
+                               length: MemoryLayout<Vertex>.stride * vertices.count,
+                               index: Int(VertexInputIndexVertices.rawValue))
+        encoder.setVertexBytes(&viewportSize,
+                               length: MemoryLayout<simd_uint2>.stride,
+                               index: Int(VertexInputIndexViewportSize.rawValue))
     }
 
     private func finishDrawing(_ drawable: MTLDrawable, to buffer: MTLCommandBuffer, using encoder: MTLRenderCommandEncoder) {
