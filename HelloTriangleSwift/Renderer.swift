@@ -31,13 +31,21 @@ class Renderer: NSObject {
     var commandQueue: MTLCommandQueue
     var viewportSize: simd_uint2 = vector2(0, 0)
 
-    private static let shouldUseWideColor = false  // change to `true` to support extended color
-    
+    // Thank you to David Gavilan for showing how to do this!
+    // http://endavid.com/index.php?entry=79
+
+    private static let linearP3ToLinearSRGBMatrix: matrix_float3x3 = {
+        let col1 = float3([1.2249,  -0.2247,  0])
+        let col2 = float3([-0.0420,   1.0419,  0])
+        let col3 = float3([-0.0197,  -0.0786,  1.0979])
+        return matrix_float3x3([col1, col2, col3])
+    }()
+
     private var vertices = [Vertex]()
 
     init(metalKitView: MTKView) throws {
-        metalKitView.colorPixelFormat = Renderer.shouldUseWideColor ? .bgra10_xr : .bgra8Unorm
-        
+        metalKitView.colorPixelFormat = .bgra10_xr_srgb // srgb means the MTKView will apply gamma encoding
+
         guard let device = metalKitView.device else { throw Errors.deviceNotFound }
         guard let library = device.makeDefaultLibrary() else { throw Errors.cantCreateLibrary }
         guard let pipelineState = Renderer.makePipelineState(for: metalKitView, device: device, library: library) else { throw Errors.cantCreatePipeline }
@@ -64,18 +72,20 @@ class Renderer: NSObject {
         let minX = Float(-maxX)
         let maxY = Float(size.height / 2.0 - padding)
         let minY = Float(-maxY)
-        
-        if Renderer.shouldUseWideColor {
-            let vertex1 = Vertex(position: float2(minX ,minY), color: float4([1.0930, -0.2267, -0.1501, 1.0]))
-            let vertex2 = Vertex(position: float2(0, maxY), color: float4([-0.5118, 1.0183, -0.3107, 1.0]))
-            let vertex3 = Vertex(position: float2(maxX, minY), color: float4([0.0002, 0.0004, 1.0419, 1.0]))
-            return [vertex1, vertex2, vertex3]
-        } else {
-            let vertex1 = Vertex(position: float2(minX ,minY), color: float4([1.0, 0.0, 0.0, 1.0]))
-            let vertex2 = Vertex(position: float2(0, maxY), color: float4([0.0, 1.0, 0.0, 1.0]))
-            let vertex3 = Vertex(position: float2(maxX, minY), color: float4([0.0, 0.0, 1.0, 1.0]))
-            return [vertex1, vertex2, vertex3]
+
+        let red = float3([1.0, 0.0, 0.0])
+        let green = float3([0.0, 1.0, 0.0])
+        let blue = float3([0.0, 0.0, 1.0])
+
+        func toSRGB(_ p3: float3) -> float4 {
+            let srbg = p3 * Renderer.linearP3ToLinearSRGBMatrix
+            return float4(x: srbg.x, y: srbg.y, z: srbg.z, w: 1.0)
         }
+
+        let vertex1 = Vertex(position: float2(minX ,minY), color: toSRGB(red))
+        let vertex2 = Vertex(position: float2(0, maxY), color: toSRGB(green))
+        let vertex3 = Vertex(position: float2(maxX, minY), color: toSRGB(blue))
+        return [vertex1, vertex2, vertex3]
     }
 }
 
