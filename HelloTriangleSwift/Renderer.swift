@@ -11,6 +11,28 @@ import MetalKit
 import Foundation
 import simd
 
+extension float3 {
+    var gammaDecoded: float3 {
+        let f = {(c: Float) -> Float in
+            if abs(c) <= 0.04045 {
+                return c / 12.92
+            }
+            return sign(c) * powf((abs(c) + 0.055) / 1.055, 2.4)
+        }
+        return float3(f(x), f(y), f(z))
+    }
+
+    var gammaEncoded: float3 {
+        let f = {(c: Float) -> Float in
+            if abs(c) <= 0.0031308 {
+                return c * 12.92
+            }
+            return sign(c) * (powf(abs(c), 1/2.4) * 1.055 - 0.055)
+        }
+        return float3 (f(x), f(y), f(z))
+    }
+}
+
 class Renderer: NSObject {
     
     enum Errors: LocalizedError {
@@ -34,17 +56,17 @@ class Renderer: NSObject {
     // Thank you to David Gavilan for showing how to do this!
     // http://endavid.com/index.php?entry=79
 
-    private static let linearP3ToLinearSRGBMatrix: matrix_float3x3 = {
-        let col1 = float3([1.2249,  -0.2247,  0])
-        let col2 = float3([-0.0420,   1.0419,  0])
-        let col3 = float3([-0.0197,  -0.0786,  1.0979])
-        return matrix_float3x3([col1, col2, col3])
-    }()
+private static let linearP3ToLinearSRGBMatrix: matrix_float3x3 = {
+    let col1 = float3([1.2249,  -0.2247,  0])
+    let col2 = float3([-0.0420,   1.0419,  0])
+    let col3 = float3([-0.0197,  -0.0786,  1.0979])
+    return matrix_float3x3([col1, col2, col3])
+}()
 
     private var vertices = [Vertex]()
 
     init(metalKitView: MTKView) throws {
-        metalKitView.colorPixelFormat = .bgra10_xr_srgb // srgb means the MTKView will apply gamma encoding
+        metalKitView.colorPixelFormat = .bgra10_xr // MTKView will not apply gamma encoding
 
         guard let device = metalKitView.device else { throw Errors.deviceNotFound }
         guard let library = device.makeDefaultLibrary() else { throw Errors.cantCreateLibrary }
@@ -73,18 +95,26 @@ class Renderer: NSObject {
         let maxY = Float(size.height / 2.0 - padding)
         let minY = Float(-maxY)
 
-        let red = float3([1.0, 0.0, 0.0])
-        let green = float3([0.0, 1.0, 0.0])
-        let blue = float3([0.0, 0.0, 1.0])
+        let p3red = float3([1.0, 0.0, 0.0])
+        let p3green = float3([0.0, 1.0, 0.0])
+        let p3blue = float3([0.0, 0.0, 1.0])
 
         func toSRGB(_ p3: float3) -> float4 {
-            let srbg = p3 * Renderer.linearP3ToLinearSRGBMatrix
-            return float4(x: srbg.x, y: srbg.y, z: srbg.z, w: 1.0)
+            // Note: gamma decoding not strictly necessary in this demo
+            // because 0 and 1 always decode to 0 and 1
+            let linearSrbg = p3.gammaDecoded * Renderer.linearP3ToLinearSRGBMatrix
+            let srgb = linearSrbg.gammaEncoded
+            return float4(x: srgb.x, y: srgb.y, z: srgb.z, w: 1.0)
         }
 
-        let vertex1 = Vertex(position: float2(minX ,minY), color: toSRGB(red))
-        let vertex2 = Vertex(position: float2(0, maxY), color: toSRGB(green))
-        let vertex3 = Vertex(position: float2(maxX, minY), color: toSRGB(blue))
+        let leftCorner = float2(minX ,minY)
+        let top = float2(0, maxY)
+        let rightCorner = float2(maxX, minY)
+
+        let vertex1 = Vertex(position: leftCorner, color: toSRGB(p3red))
+        let vertex2 = Vertex(position: top, color: toSRGB(p3green))
+        let vertex3 = Vertex(position: rightCorner, color: toSRGB(p3blue))
+
         return [vertex1, vertex2, vertex3]
     }
 }
