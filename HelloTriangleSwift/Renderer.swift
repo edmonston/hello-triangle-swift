@@ -104,6 +104,9 @@ private static let linearP3ToLinearSRGBMatrix: matrix_float3x3 = {
             // because 0 and 1 always decode to 0 and 1
             let linearSrbg = p3.gammaDecoded * Renderer.linearP3ToLinearSRGBMatrix
             let srgb = linearSrbg.gammaEncoded
+
+            // Swap these two lines to see the demo without wide color
+            // return float4(x: p3.x, y: p3.y, z: p3.z, w: 1.0)
             return float4(x: srgb.x, y: srgb.y, z: srgb.z, w: 1.0)
         }
 
